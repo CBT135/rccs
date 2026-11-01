@@ -81,6 +81,10 @@ téléphone, et le Bluetooth doit être actif.
 Pour tester sans montre : **Monkey C: Run** ouvre le simulateur. Le téléchargement de parcours
 y est simulé de façon partielle.
 
+**Si l'application disparaît après une mise à jour** : supprime l'ancienne version et vide le
+cache avec Garmin Express, puis recopie le nouveau `.prg`. Ne garde qu'un seul `.prg` de
+l'application dans `GARMIN/APPS`.
+
 ## Fichiers
 
 ```

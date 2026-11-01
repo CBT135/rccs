@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Synchronise les traces Garmin des événements Spond du club vers Garmin Connect
-et publie la prochaine trace dans le dépôt (dossier trace/).
+"""Publie dans le dépôt (dossier trace/) la dernière trace Garmin postée sur Spond.
 
 Étapes :
   1. Connexion à Spond, lecture des événements à venir (avec commentaires).
   2. Recherche des liens de parcours Garmin (connect.garmin.com/.../course/<id>)
-     dans la description et les commentaires.
-  3. Pour chaque événement trouvé : ajout au calendrier Garmin d'un événement
-     AAAAMMJJ-<SIGLE> (ex. 20261104-RCCS) à la date et l'heure de l'événement
-     Spond (sans copier le parcours dans le compte, rien n'est recréé s'il existe).
-  4. La dernière trace postée sur Spond est téléchargée en GPX, renommée
-     AAAAMMJJ-<SIGLE> et écrite dans trace/ (GPX + latest.json + latest.txt) ; les anciennes traces sont supprimées, il n'en
-     reste qu'une seule. C'est ce que télécharge l'application de la montre.
+     dans la description et les commentaires ; on retient le plus récent.
+  3. Téléchargement du parcours en GPX (lecture seule : rien n'est écrit dans le
+     compte Garmin, la connexion sert uniquement à lire le parcours), renommé
+     AAAAMMJJ-<SIGLE> d'après la date de l'événement (ex. 20261104-RCCS).
+  4. Écriture dans trace/ (GPX + latest.json + latest.txt). L'ancienne trace n'est
+     supprimée qu'une fois la nouvelle téléchargée ; sans nouvelle trace, le
+     dossier reste inchangé. C'est ce que télécharge l'application de la montre.
 
 Variables d'environnement (secrets GitHub) :
   SPOND_USERNAME, SPOND_PASSWORD     identifiants Spond
@@ -137,45 +136,6 @@ def garmin_client():
     return g
 
 
-def month_items(g, day: dt.date, cache: dict) -> list[dict]:
-    key = (day.year, day.month)
-    if key not in cache:
-        data = g.connectapi(f"/calendar-service/year/{day.year}/month/{day.month - 1}")
-        cache[key] = data.get("calendarItems") or []
-    return cache[key]
-
-
-def ensure_event(g, name: str, start: dt.datetime, course: dict, event: dict, cache: dict) -> None:
-    day = start.date()
-    for it in month_items(g, day, cache):
-        if it.get("title") == name and it.get("date") == day.isoformat():
-            log(f"  événement {name} déjà au calendrier")
-            return
-    loc = event.get("location") or {}
-    city = loc.get("address") or loc.get("feature") or ""
-    sp = json.loads(course["startPoint"]) if isinstance(course.get("startPoint"), str) else (course.get("startPoint") or {})
-    body = {
-        "eventName": name,
-        "date": day.isoformat(),
-        "completionTarget": {
-            "value": round((course.get("distanceMeter") or 0) / 1000, 2),
-            "unit": "kilometer",
-            "unitType": "distance",
-        },
-        "eventTimeLocal": {"startTimeHhMm": start.strftime("%H:%M"), "timeZoneId": "Europe/Paris"},
-        "note": f"Spond : {event.get('heading', '')}",
-        "location": f"{city}, FR" if city else None,
-        "locationStartPoint": {"lat": sp.get("latitude"), "lon": sp.get("longitude")} if sp else None,
-        "eventType": "running",
-        "eventPrivacy": {"label": "PRIVATE", "isShareable": False, "isDiscoverable": False},
-        "eventCustomization": {"customGoal": None, "isPrimaryEvent": False, "isTrainingEvent": False},
-        "race": False,
-    }
-    g.create_calendar_event(body)
-    cache.pop((day.year, day.month), None)
-    log(f"  événement {name} ajouté au calendrier le {day} à {start:%H:%M}")
-
-
 def rename_gpx(raw: bytes, name: str) -> bytes:
     ns = "http://www.topografix.com/GPX/1/1"
     ET.register_namespace("", ns)
@@ -210,7 +170,7 @@ def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, poste
         "heure": start.strftime("%H:%M"),
         "titre": event.get("heading"),
         "garminCourseId": course_id,
-        "publieeSurSpond": posted.astimezone(TZ).isoformat(timespec="minutes"),
+        "publieeSurSpond": posted.astimezone(TZ).isoformat(timespec="seconds"),
     }
     (TRACE_DIR / "latest.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
     # Lu par l'application de la montre (GitHub sert les fichiers bruts en text/plain).
@@ -236,8 +196,8 @@ def main() -> None:
         found.append((start, name, cid, ev, posted))
 
     if not found:
-        log("Aucun événement Spond à venir avec une trace Garmin. Dépôt inchangé.")
-        # Vérifie quand même la connexion Garmin pour détecter un problème avant la prochaine trace.
+        log("Aucun événement Spond à venir avec une trace Garmin : trace précédente conservée.")
+        # Vérifie quand même la connexion Garmin (lecture) pour détecter un problème avant la prochaine trace.
         try:
             garmin_client()
             log("Connexion Garmin OK.")
@@ -249,16 +209,21 @@ def main() -> None:
         return
 
     g = garmin_client()
-    cache: dict = {}
-    for start, name, cid, ev, posted in found:
-        log(f"{start:%d/%m %H:%M} {ev.get('heading')} -> {name} (parcours {cid})")
-        try:
-            ensure_event(g, name, start, g.get_course(cid), ev, cache)
-        except Exception as e:  # on continue avec les autres événements
-            log(f"  ERREUR calendrier Garmin : {e}")
-
     # Dépôt : uniquement la dernière trace postée sur Spond.
     start, name, cid, ev, posted = max(found, key=lambda x: x[4])
+
+    # On ne remplace la trace du dépôt que par une trace postée plus récemment.
+    current = TRACE_DIR / "latest.json"
+    if current.exists():
+        try:
+            meta = json.loads(current.read_text())
+            prev = dt.datetime.fromisoformat(meta["publieeSurSpond"])
+            if posted <= prev:
+                log(f"Pas de nouvelle trace (dernière publiée : {meta['name']}) : dépôt inchangé.")
+                return
+        except (KeyError, ValueError):
+            pass
+    log(f"Dernière trace postée : {ev.get('heading')} du {start:%d/%m %H:%M} -> {name} (parcours {cid})")
     publish(g, name, cid, start, ev, posted)
 
 
@@ -269,4 +234,4 @@ if __name__ == "__main__":
         out = os.environ.get("GITHUB_STEP_SUMMARY")
         if out and SUMMARY:
             with open(out, "a", encoding="utf-8") as fh:
-                fh.write("### Synchro Spond → Garmin\n\n" + "\n".join(f"- {l}" for l in SUMMARY) + "\n")
+                fh.write("### Trace Spond RCCS\n\n" + "\n".join(f"- {l}" for l in SUMMARY) + "\n")

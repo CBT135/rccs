@@ -51,7 +51,7 @@ gh secret set GARMIN_PASSWORD -R cbt135/rccs
 depuis les serveurs GitHub), lance `python sync/garmin_tokens.py` sur ton ordinateur et colle le
 résultat dans le secret `GARMIN_TOKENS`. Ces jetons restent valables environ un an.
 
-**Tester tout de suite** : onglet **Actions → Synchro Spond → Garmin → Run workflow**.
+**Tester tout de suite** : onglet **Actions → Trace Spond RCCS → Run workflow**.
 
 > Le dépôt est public, ce qui permet à la montre de télécharger la trace sans identifiant. Les
 > secrets restent privés, mais la trace et la date de la prochaine sortie sont visibles par

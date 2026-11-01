@@ -237,6 +237,15 @@ def main() -> None:
 
     if not found:
         log("Aucun événement Spond à venir avec une trace Garmin. Dépôt inchangé.")
+        # Vérifie quand même la connexion Garmin pour détecter un problème avant la prochaine trace.
+        try:
+            garmin_client()
+            log("Connexion Garmin OK.")
+        except SystemExit:
+            raise
+        except Exception as e:
+            log(f"ERREUR connexion Garmin : {e}")
+            raise
         return
 
     g = garmin_client()

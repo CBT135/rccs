@@ -6,12 +6,11 @@ et publie la prochaine trace dans le dépôt (dossier trace/).
   1. Connexion à Spond, lecture des événements à venir (avec commentaires).
   2. Recherche des liens de parcours Garmin (connect.garmin.com/.../course/<id>)
      dans la description et les commentaires.
-  3. Pour chaque événement trouvé : copie du parcours dans le compte Garmin sous le
-     nom AAAAMMJJ-<SIGLE> (ex. 20261104-RCCS), en privé, puis ajout d'un
-     événement au calendrier Garmin à la date et l'heure de l'événement Spond.
-     Rien n'est recréé si le parcours ou l'événement existe déjà.
-  4. La trace de l'événement à venir le plus proche est écrite dans trace/
-     (FIT + GPX + latest.json + latest.txt) ; les anciennes traces sont supprimées, il n'en
+  3. Pour chaque événement trouvé : ajout au calendrier Garmin d'un événement
+     AAAAMMJJ-<SIGLE> (ex. 20261104-RCCS) à la date et l'heure de l'événement
+     Spond (sans copier le parcours dans le compte, rien n'est recréé s'il existe).
+  4. La dernière trace postée sur Spond est téléchargée en GPX, renommée
+     AAAAMMJJ-<SIGLE> et écrite dans trace/ (GPX + latest.json + latest.txt) ; les anciennes traces sont supprimées, il n'en
      reste qu'une seule. C'est ce que télécharge l'application de la montre.
 
 Variables d'environnement (secrets GitHub) :
@@ -24,7 +23,6 @@ Variables d'environnement (secrets GitHub) :
 from __future__ import annotations
 
 import asyncio
-import copy
 import datetime as dt
 import json
 import os
@@ -88,12 +86,31 @@ def texts_of(event: dict) -> list[str]:
     return out
 
 
-def course_id_of(event: dict) -> int | None:
-    """Dernier lien de parcours publié pour l'événement (le plus à jour)."""
-    ids: list[int] = []
-    for t in texts_of(event):
-        ids += [int(x) for x in COURSE_RE.findall(t)]
-    return ids[-1] if ids else None
+def _ts(v) -> dt.datetime:
+    """Horodatage Spond (ISO ou millisecondes) -> datetime UTC."""
+    if isinstance(v, (int, float)):
+        return dt.datetime.fromtimestamp(v / 1000, dt.timezone.utc)
+    if isinstance(v, str) and v:
+        return dt.datetime.fromisoformat(v.replace("Z", "+00:00"))
+    return dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+
+def course_link_of(event: dict) -> tuple[int, dt.datetime] | None:
+    """Dernier lien de parcours publié dans l'événement, avec sa date de publication."""
+    best: tuple[int, dt.datetime] | None = None
+    desc_ids = COURSE_RE.findall(event.get("description") or "")
+    if desc_ids:
+        best = (int(desc_ids[-1]), _ts(event.get("createdTime") or event.get("updated")))
+    stack = list(event.get("comments") or [])
+    while stack:
+        c = stack.pop(0)
+        stack.extend(c.get("children") or [])
+        ids = COURSE_RE.findall(c.get("text") or "")
+        if ids:
+            when = _ts(c.get("timestamp"))
+            if best is None or when >= best[1]:
+                best = (int(ids[-1]), when)
+    return best
 
 
 def club_sigle(event: dict) -> str:
@@ -120,35 +137,6 @@ def garmin_client():
     return g
 
 
-STRIP_KEYS = (
-    "courseId", "userProfilePk", "displayName", "firstName", "lastName",
-    "geoRoutePk", "virtualPartnerId", "createDate", "updateDate", "favorite",
-    "hasShareableEvent", "hasPaceBand", "hasPowerGuide",
-)
-
-
-def ensure_course(g, source_id: int, name: str, my_courses: dict[str, int]) -> int:
-    """Copie privée du parcours source sous le nom voulu (réutilisée si elle existe)."""
-    if name in my_courses:
-        log(f"  parcours {name} déjà présent (id {my_courses[name]})")
-        return my_courses[name]
-    src = g.get_course(source_id)
-    new = copy.deepcopy(src)
-    for k in STRIP_KEYS:
-        new.pop(k, None)
-    new["courseName"] = name
-    new["rulePK"] = 2  # 2 = privé
-    for line in new.get("courseLines") or []:
-        line["courseId"] = None
-    res = g.create_course(new)
-    if hasattr(res, "json"):
-        res = res.json()
-    cid = int(res["courseId"])
-    my_courses[name] = cid
-    log(f"  parcours {name} créé (id {cid}, copie de {source_id})")
-    return cid
-
-
 def month_items(g, day: dt.date, cache: dict) -> list[dict]:
     key = (day.year, day.month)
     if key not in cache:
@@ -169,7 +157,6 @@ def ensure_event(g, name: str, start: dt.datetime, course: dict, event: dict, ca
     body = {
         "eventName": name,
         "date": day.isoformat(),
-        "courseId": course["courseId"],
         "completionTarget": {
             "value": round((course.get("distanceMeter") or 0) / 1000, 2),
             "unit": "kilometer",
@@ -207,25 +194,23 @@ def rename_gpx(raw: bytes, name: str) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def publish(g, name: str, course_id: int, start: dt.datetime, event: dict) -> None:
+def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, posted: dt.datetime) -> None:
     """Écrit la trace dans trace/ et supprime toutes les autres."""
     TRACE_DIR.mkdir(exist_ok=True)
-    fit = g.download_course(course_id, fmt="fit")
     gpx = rename_gpx(g.download_course(course_id, fmt="gpx"), name)
-    keep = {f"{name}.fit", f"{name}.gpx", "latest.json", "latest.txt"}
+    keep = {f"{name}.gpx", "latest.json", "latest.txt"}
     for f in TRACE_DIR.iterdir():
         if f.is_file() and f.name not in keep:
             f.unlink()
-    (TRACE_DIR / f"{name}.fit").write_bytes(fit)
     (TRACE_DIR / f"{name}.gpx").write_bytes(gpx)
     meta = {
         "name": name,
-        "fit": f"trace/{name}.fit",
         "gpx": f"trace/{name}.gpx",
         "date": start.date().isoformat(),
         "heure": start.strftime("%H:%M"),
         "titre": event.get("heading"),
         "garminCourseId": course_id,
+        "publieeSurSpond": posted.astimezone(TZ).isoformat(timespec="minutes"),
     }
     (TRACE_DIR / "latest.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
     # Lu par l'application de la montre (GitHub sert les fichiers bruts en text/plain).
@@ -237,39 +222,35 @@ def publish(g, name: str, course_id: int, start: dt.datetime, event: dict) -> No
 
 def main() -> None:
     events = asyncio.run(spond_events())
-    now = dt.datetime.now(TZ)
     found = []
     per_day: dict[str, int] = {}
-    for ev in events:
-        cid = course_id_of(ev)
-        if not cid:
+    for ev in sorted(events, key=lambda e: e["startTimestamp"]):
+        link = course_link_of(ev)
+        if not link:
             continue
+        cid, posted = link
         start = dt.datetime.fromisoformat(ev["startTimestamp"].replace("Z", "+00:00")).astimezone(TZ)
         base = f"{start:%Y%m%d}-{club_sigle(ev)}"
         per_day[base] = per_day.get(base, 0) + 1
         name = base if per_day[base] == 1 else f"{base}-{per_day[base]}"
-        found.append((start, name, cid, ev))
+        found.append((start, name, cid, ev, posted))
 
     if not found:
         log("Aucun événement Spond à venir avec une trace Garmin. Dépôt inchangé.")
         return
 
     g = garmin_client()
-    my_courses = {c.get("courseName"): int(c["courseId"]) for c in (g.get_courses() or [])}
     cache: dict = {}
-    published = False
-    for start, name, cid, ev in sorted(found, key=lambda x: x[0]):
-        log(f"{start:%d/%m %H:%M} {ev.get('heading')} -> {name} (parcours source {cid})")
+    for start, name, cid, ev, posted in found:
+        log(f"{start:%d/%m %H:%M} {ev.get('heading')} -> {name} (parcours {cid})")
         try:
-            my_id = ensure_course(g, cid, name, my_courses)
-            course = g.get_course(my_id)
-            ensure_event(g, name, start, course, ev, cache)
+            ensure_event(g, name, start, g.get_course(cid), ev, cache)
         except Exception as e:  # on continue avec les autres événements
-            log(f"  ERREUR Garmin : {e}")
-            continue
-        if not published and start >= now - dt.timedelta(hours=3):
-            publish(g, name, my_id, start, ev)
-            published = True
+            log(f"  ERREUR calendrier Garmin : {e}")
+
+    # Dépôt : uniquement la dernière trace postée sur Spond.
+    start, name, cid, ev, posted = max(found, key=lambda x: x[4])
+    publish(g, name, cid, start, ev, posted)
 
 
 if __name__ == "__main__":

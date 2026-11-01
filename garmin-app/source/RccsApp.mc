@@ -3,7 +3,7 @@ import Toybox.Lang;
 import Toybox.WatchUi;
 
 // Application « Trace RCCS » : au lancement, télécharge depuis GitHub la dernière
-// trace du club (fichier FIT nommé AAAAMMJJ-RCCS) et l'enregistre dans les
+// trace du club (fichier GPX nommé AAAAMMJJ-RCCS) et l'enregistre dans les
 // parcours de la montre.
 class RccsApp extends Application.AppBase {
 

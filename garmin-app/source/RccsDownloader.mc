@@ -71,20 +71,20 @@ class RccsDownloader {
             return;
         }
 
-        // 2. Télécharge le FIT : la montre l'enregistre d'elle-même dans les parcours.
+        // 2. Télécharge le GPX (nommé AAAAMMJJ-RCCS) : la montre l'enregistre dans les parcours.
         _view.show("Téléchargement", name);
         Communications.makeWebRequest(
-            RCCS_BASE_URL + name + ".fit",
+            RCCS_BASE_URL + name + ".gpx",
             { "t" => Time.now().value() },
             {
                 :method => Communications.HTTP_REQUEST_METHOD_GET,
-                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_FIT
+                :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_GPX
             },
-            method(:onFit)
+            method(:onTrace)
         );
     }
 
-    function onFit(code as Number, data as Null or ByteArray or Dictionary or String or PersistedContent.Iterator) as Void {
+    function onTrace(code as Number, data as Null or ByteArray or Dictionary or String or PersistedContent.Iterator) as Void {
         _busy = false;
         if (code != 200) {
             fail(code);

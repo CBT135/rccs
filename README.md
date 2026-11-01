@@ -1,9 +1,9 @@
 # RCCS : traces Spond → Garmin
 
 Ce dépôt récupère automatiquement les parcours Garmin publiés dans les événements Spond du
-Running Club Colombier-Saugnieu. Chaque parcours est copié dans Garmin Connect sous le nom
-**AAAAMMJJ-RCCS** et ajouté au calendrier. L'application **Trace RCCS** permet ensuite de le
-charger sur la montre.
+Running Club Colombier-Saugnieu. La dernière trace postée est publiée ici sous le nom
+**AAAAMMJJ-RCCS**, et l'application **Trace RCCS** la charge sur la montre. Les sorties sont aussi
+notées au calendrier Garmin, sans copie du parcours dans le compte.
 
 ## Fonctionnement
 
@@ -11,17 +11,16 @@ charger sur la montre.
    vendredi à 17h, et le samedi à 18h, heure de Paris (heure d'été et d'hiver gérées).
    - Elle lit les événements Spond à venir et cherche un lien `connect.garmin.com/.../course/<id>`
      dans la description ou les commentaires.
-   - Pour chaque événement trouvé, elle crée dans ton compte Garmin une copie privée du parcours,
-     nommée `AAAAMMJJ-RCCS` d'après la date de l'événement. Si deux événements tombent le même
-     jour, le second reçoit le suffixe `-2`.
-   - Elle ajoute ensuite un événement au calendrier Garmin à la date et à l'heure prévues.
-   - Elle ne recrée rien si le parcours ou l'événement existe déjà.
-   - Elle publie dans `trace/` la trace de l'événement à venir le plus proche (`.fit`, `.gpx`,
-     `latest.txt`, `latest.json`). Les traces précédentes sont supprimées : le dossier n'en
-     contient jamais qu'une.
+   - Pour chaque événement trouvé, elle ajoute au calendrier Garmin un événement `AAAAMMJJ-RCCS`
+     (date de l'événement, suffixe `-2` si deux sorties le même jour) à l'heure prévue. Le parcours
+     n'est pas copié dans le compte Garmin, et rien n'est recréé s'il existe déjà.
+   - Elle publie dans `trace/` la **dernière trace postée sur Spond** (celle du commentaire ou de
+     la description le plus récent), téléchargée en GPX et renommée `AAAAMMJJ-RCCS`
+     (`.gpx`, `latest.txt`, `latest.json`). Les traces précédentes sont supprimées : le dossier
+     n'en contient jamais qu'une.
    - Un résumé de chaque exécution s'affiche dans l'onglet **Actions**.
 2. **Application montre** (`garmin-app/`). Au lancement, elle lit `trace/latest.txt`, télécharge
-   le `.fit` correspondant via le téléphone et l'enregistre dans **Parcours**, sous le nom
+   le `.gpx` correspondant via le téléphone et l'enregistre dans **Parcours**, sous le nom
    `AAAAMMJJ-RCCS`. Appuyer sur START lance la navigation sur ce parcours. Une trace déjà présente
    sur la montre n'est pas téléchargée une seconde fois.
 
@@ -82,7 +81,7 @@ y est simulé de façon partielle.
 
 ```
 .github/workflows/sync.yml   tâche planifiée
-sync/sync_rccs.py            synchro Spond → Garmin + publication de la trace
+sync/sync_rccs.py            calendrier Garmin + publication de la dernière trace
 sync/garmin_tokens.py        génération des jetons Garmin (à lancer en local)
 trace/                       dernière trace uniquement (écrit par la tâche)
 garmin-app/                  application Connect IQ « Trace RCCS »

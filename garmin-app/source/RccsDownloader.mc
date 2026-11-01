@@ -49,7 +49,7 @@ class RccsDownloader {
         );
     }
 
-    function onName(code as Number, data) as Void {
+    function onName(code as Number, data as Null or ByteArray or Dictionary or String or PersistedContent.Iterator) as Void {
         if (code != 200 || !(data instanceof String)) {
             fail(code);
             return;
@@ -84,7 +84,7 @@ class RccsDownloader {
         );
     }
 
-    function onFit(code as Number, data) as Void {
+    function onFit(code as Number, data as Null or ByteArray or Dictionary or String or PersistedContent.Iterator) as Void {
         _busy = false;
         if (code != 200) {
             fail(code);
@@ -110,9 +110,6 @@ class RccsDownloader {
 
     private function findCourse(name as String) {
         var it = PersistedContent.getCourses();
-        if (it == null) {
-            return null;
-        }
         var c = it.next();
         while (c != null) {
             var n = c.getName();

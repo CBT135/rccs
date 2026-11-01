@@ -1,0 +1,70 @@
+name: Synchro Spond → Garmin
+
+# Mercredi et vendredi à 17h, samedi à 18h, heure de Paris.
+# GitHub planifie en UTC : chaque créneau est déclaré pour l'heure d'été et
+# l'heure d'hiver, et l'étape « Créneau » ne garde que le bon.
+on:
+  schedule:
+    - cron: "0 15 * * 3,5"   # 17h été (UTC+2)
+    - cron: "0 16 * * 3,5"   # 17h hiver (UTC+1)
+    - cron: "0 16 * * 6"     # 18h été
+    - cron: "0 17 * * 6"     # 18h hiver
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-rccs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Créneau (heure d'été / d'hiver)
+        id: slot
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ -z "$SCHEDULE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          offset=$(TZ=Europe/Paris date +%z)          # +0200 l'été, +0100 l'hiver
+          case "$SCHEDULE" in
+            "0 15 * * 3,5"|"0 16 * * 6") want="+0200" ;;
+            *) want="+0100" ;;
+          esac
+          if [ "$offset" = "$want" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; echo "Créneau de l'autre saison, rien à faire."; fi
+
+      - uses: actions/checkout@v4
+        if: steps.slot.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.slot.outputs.run == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: sync/requirements.txt
+
+      - name: Dépendances
+        if: steps.slot.outputs.run == 'true'
+        run: pip install -r sync/requirements.txt
+
+      - name: Synchro
+        if: steps.slot.outputs.run == 'true'
+        env:
+          SPOND_USERNAME: ${{ secrets.SPOND_USERNAME }}
+          SPOND_PASSWORD: ${{ secrets.SPOND_PASSWORD }}
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
+        run: python sync/sync_rccs.py
+
+      - name: Publier la trace
+        if: steps.slot.outputs.run == 'true'
+        run: |
+          git add -A trace
+          if git diff --cached --quiet; then echo "Trace inchangée."; exit 0; fi
+          name=$(python -c "import json;print(json.load(open('trace/latest.json'))['name'])")
+          git -c user.name="github-actions[bot]" -c user.email="41898299+github-actions[bot]@users.noreply.github.com" commit -m "Trace $name"
+          git push

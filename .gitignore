@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+garmin-app/bin/
+garmin-app/gen/
+garmin-app/internal-mir/
+*.prg
+*.iq
+developer_key*

@@ -1,0 +1,2 @@
+spond==1.2.1
+garminconnect==0.3.20

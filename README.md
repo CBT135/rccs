@@ -19,7 +19,7 @@ sur la montre.
      n'est supprimée qu'une fois la nouvelle téléchargée.
    - Un résumé de chaque exécution s'affiche dans l'onglet **Actions**.
 2. **Application montre** (`garmin-app/`). Au lancement, elle lit `trace/latest.txt`, télécharge
-   le `.gpx` correspondant via le téléphone et l'enregistre dans **Parcours**, sous le nom
+   le `.fit` correspondant via le téléphone et l'enregistre dans **Parcours**, sous le nom
    `AAAAMMJJ-RCCS`. Appuyer sur START lance la navigation sur ce parcours. Une trace déjà présente
    sur la montre n'est pas téléchargée une seconde fois.
 

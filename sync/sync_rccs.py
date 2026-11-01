@@ -8,7 +8,7 @@
   3. Téléchargement du parcours en GPX (lecture seule : rien n'est écrit dans le
      compte Garmin, la connexion sert uniquement à lire le parcours), renommé
      AAAAMMJJ-<SIGLE> d'après la date de l'événement (ex. 20261104-RCCS).
-  4. Écriture dans trace/ (GPX + latest.json + latest.txt). L'ancienne trace n'est
+  4. Écriture dans trace/ (FIT pour la montre + GPX + latest.json + latest.txt). L'ancienne trace n'est
      supprimée qu'une fois la nouvelle téléchargée ; sans nouvelle trace, le
      dossier reste inchangé. C'est ce que télécharge l'application de la montre.
 
@@ -163,14 +163,19 @@ def rename_gpx(raw: bytes, name: str) -> bytes:
 def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, posted: dt.datetime) -> None:
     """Écrit la trace dans trace/ et supprime toutes les autres."""
     TRACE_DIR.mkdir(exist_ok=True)
+    from gpx2fit import gpx_to_fit
+
     gpx = rename_gpx(g.download_course(course_id, fmt="gpx"), name)
-    keep = {f"{name}.gpx", "latest.json", "latest.txt"}
+    fit = gpx_to_fit(gpx, name)  # format enregistré comme parcours par la montre
+    keep = {f"{name}.fit", f"{name}.gpx", "latest.json", "latest.txt"}
     for f in TRACE_DIR.iterdir():
         if f.is_file() and f.name not in keep:
             f.unlink()
     (TRACE_DIR / f"{name}.gpx").write_bytes(gpx)
+    (TRACE_DIR / f"{name}.fit").write_bytes(fit)
     meta = {
         "name": name,
+        "fit": f"trace/{name}.fit",
         "gpx": f"trace/{name}.gpx",
         "date": start.date().isoformat(),
         "heure": start.strftime("%H:%M"),

@@ -9,7 +9,20 @@ on:
     - cron: "0 16 * * 3,5"   # 17h hiver (UTC+1)
     - cron: "0 16 * * 6"     # 18h été
     - cron: "0 17 * * 6"     # 18h hiver
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      course:
+        description: "Facultatif : parcours Garmin à publier (lien ou numéro). Vide = lecture de Spond."
+        required: false
+        default: ""
+      date:
+        description: "Date de la sortie (AAAA-MM-JJ), si un parcours est indiqué"
+        required: false
+        default: ""
+      heure:
+        description: "Heure de la sortie (HH:MM)"
+        required: false
+        default: "18:30"
 
 permissions:
   contents: write
@@ -58,6 +71,9 @@ jobs:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
           GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
+          FORCE_COURSE_ID: ${{ github.event.inputs.course }}
+          FORCE_DATE: ${{ github.event.inputs.date }}
+          FORCE_TIME: ${{ github.event.inputs.heure }}
         run: python sync/sync_rccs.py
 
       - name: Publier la trace

@@ -53,6 +53,11 @@ résultat dans le secret `GARMIN_TOKENS`. Ces jetons restent valables environ un
 
 **Tester tout de suite** : onglet **Actions → Trace Spond RCCS → Run workflow**.
 
+**Publier un parcours précis** (test, ou trace partagée ailleurs que sur Spond) : dans
+**Run workflow**, renseigne le lien ou le numéro du parcours Garmin, la date (AAAA-MM-JJ) et
+l'heure. Spond n'est pas lu. La trace est publiée sous le nom AAAAMMJJ-RCCS et sera remplacée par
+la prochaine trace postée sur Spond.
+
 > Le dépôt est public, ce qui permet à la montre de télécharger la trace sans identifiant. Les
 > secrets restent privés, mais la trace et la date de la prochaine sortie sont visibles par
 > tous.

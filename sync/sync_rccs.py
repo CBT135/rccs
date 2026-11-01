@@ -139,6 +139,12 @@ def garmin_client():
 def rename_gpx(raw: bytes, name: str) -> bytes:
     ns = "http://www.topografix.com/GPX/1/1"
     ET.register_namespace("", ns)
+    # Conserve les préfixes d'origine de Garmin (sinon ET écrit ns0, ns1…).
+    for prefix, uri in re.findall(rb'xmlns:(\w+)="([^"]+)"', raw):
+        try:
+            ET.register_namespace(prefix.decode(), uri.decode())
+        except ValueError:  # préfixes « nsN » réservés par ElementTree, renommés automatiquement
+            pass
     root = ET.fromstring(raw)
     found = False
     for tag in ("metadata", "trk", "rte"):
@@ -180,7 +186,29 @@ def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, poste
 
 # ----------------------------------------------------------------- main --
 
+def forced() -> bool:
+    """Lancement manuel avec un parcours imposé (champs du formulaire « Run workflow »)."""
+    cid = os.environ.get("FORCE_COURSE_ID", "").strip()
+    if not cid:
+        return False
+    m = COURSE_RE.search(cid)
+    cid = int(m.group(1)) if m else int(cid)
+    day = os.environ.get("FORCE_DATE", "").strip()
+    hhmm = os.environ.get("FORCE_TIME", "").strip() or "18:30"
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        sys.exit("Date attendue au format AAAA-MM-JJ.")
+    start = dt.datetime.fromisoformat(f"{day}T{hhmm}").replace(tzinfo=TZ)
+    sigle = os.environ.get("CLUB_SIGLE", "").strip() or "RCCS"
+    name = f"{start:%Y%m%d}-{sigle}"
+    log(f"Publication manuelle : parcours {cid} -> {name}")
+    # Datée du début de la sortie : toute trace postée ensuite sur Spond la remplacera.
+    publish(garmin_client(), name, cid, start, {"heading": "Publication manuelle"}, start)
+    return True
+
+
 def main() -> None:
+    if forced():
+        return
     events = asyncio.run(spond_events())
     found = []
     per_day: dict[str, int] = {}

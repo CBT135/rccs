@@ -7,7 +7,8 @@ sur la montre.
 ## Fonctionnement
 
 1. **Tâche planifiée GitHub** (`.github/workflows/sync.yml`). Elle s'exécute le mercredi et le
-   vendredi à 17h, et le samedi à 18h, heure de Paris (heure d'été et d'hiver gérées).
+   vendredi à 15h55, 16h55 et 17h55, le samedi à 18h et le dimanche à 8h55, heure de Paris
+   (heure d'été et d'hiver gérées).
    - Elle lit les événements Spond à venir et repère les liens `connect.garmin.com/.../course/<id>`
      postés en description ou en commentaire. Elle retient le plus récent.
    - Elle télécharge ce parcours en GPX et le renomme `AAAAMMJJ-RCCS` d'après la date de

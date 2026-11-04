@@ -166,7 +166,7 @@ def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, poste
     from gpx2fit import gpx_to_fit
 
     gpx = rename_gpx(g.download_course(course_id, fmt="gpx"), name)
-    fit = gpx_to_fit(gpx, name)  # format enregistré comme parcours par la montre
+    fit = gpx_to_fit(gpx, name, course_id)  # format enregistré comme parcours par la montre
     keep = {f"{name}.fit", f"{name}.gpx", "latest.json", "latest.txt"}
     for f in TRACE_DIR.iterdir():
         if f.is_file() and f.name not in keep:

@@ -1,3 +1,2 @@
 spond==1.2.1
 garminconnect==0.3.20
-fit-tool==0.9.17

@@ -1,10 +1,10 @@
 {
-  "name": "20261028-RCCS",
-  "fit": "trace/20261028-RCCS.fit",
-  "gpx": "trace/20261028-RCCS.gpx",
-  "date": "2026-10-28",
+  "name": "20261104-RCCS",
+  "fit": "trace/20261104-RCCS.fit",
+  "gpx": "trace/20261104-RCCS.gpx",
+  "date": "2026-11-04",
   "heure": "18:30",
-  "titre": "Publication manuelle",
-  "garminCourseId": 526845124,
-  "publieeSurSpond": "2026-10-28T18:30:00+01:00"
+  "titre": "Sortie collective du mercredi",
+  "garminCourseId": 528515210,
+  "publieeSurSpond": "2026-11-04T08:49:07+01:00"
 }

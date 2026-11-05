@@ -222,10 +222,33 @@ def forced() -> bool:
     return True
 
 
+URL_RE = re.compile(r"https?://\S+")
+
+
+def list_links(events: list[dict]) -> None:
+    """Mode relevé : affiche les liens postés dans les événements à venir, sans rien publier."""
+    for ev in events:
+        start = dt.datetime.fromisoformat(ev["startTimestamp"].replace("Z", "+00:00")).astimezone(TZ)
+        items = [("description", ev.get("createdTime"), ev.get("description") or "")]
+        stack = list(ev.get("comments") or [])
+        while stack:
+            c = stack.pop(0)
+            stack.extend(c.get("children") or [])
+            items.append(("commentaire", c.get("timestamp"), c.get("text") or ""))
+        for kind, when, text in items:
+            for url in URL_RE.findall(text):
+                log(f"{start:%d/%m %H:%M} {ev.get('heading')} | {kind} {_ts(when).astimezone(TZ):%d/%m %H:%M} | {url}")
+        for a in ev.get("attachments") or []:
+            log(f"{start:%d/%m %H:%M} {ev.get('heading')} | pièce jointe | {json.dumps(a, ensure_ascii=False)[:300]}")
+
+
 def main() -> None:
     if forced():
         return
     events = asyncio.run(spond_events())
+    if os.environ.get("LIST_LINKS") == "true":
+        list_links(events)
+        return
     found = []
     per_day: dict[str, int] = {}
     for ev in sorted(events, key=lambda e: e["startTimestamp"]):

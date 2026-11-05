@@ -29,6 +29,11 @@ on:
         description: "Heure de la sortie (HH:MM)"
         required: false
         default: "18:30"
+      releve:
+        description: "Relevé seulement : lister les liens postés sur Spond, sans rien publier"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -92,6 +97,7 @@ jobs:
           FORCE_COURSE_ID: ${{ github.event.inputs.course }}
           FORCE_DATE: ${{ github.event.inputs.date }}
           FORCE_TIME: ${{ github.event.inputs.heure }}
+          LIST_LINKS: ${{ github.event.inputs.releve }}
         run: python sync/sync_rccs.py
 
       - name: Publier la trace

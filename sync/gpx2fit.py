@@ -3,7 +3,10 @@
 Le fichier reproduit exactement la structure des parcours FIT exportés par
 Garmin Connect (mêmes messages, mêmes champs, mêmes types, même ordre, big-endian) :
 
-    file_id, course, lap, event (start), record x N, event (stop), file_creator
+    file_id, course, lap, event (start), record x N, course_point x M, event (stop), file_creator
+
+Les course_point de type gauche / droite (détectés automatiquement à chaque changement
+de direction marqué) déclenchent le guidage « Tourner à gauche / à droite » de la montre.
 
 Le nom du parcours (course.name) est celui affiché dans le menu Parcours de la montre.
 """
@@ -34,8 +37,23 @@ DEFS = {
     "event": (21, [(253, 4, UINT32), (0, 1, ENUM), (4, 1, UINT8), (1, 1, ENUM)]),
     "record": (20, [(0, 4, SINT32), (1, 4, SINT32), (253, 4, UINT32), (6, 2, UINT16), (5, 4, UINT32),
                     (2, 2, UINT16), (121, 2, UINT16), (122, 2, UINT16)]),
+    "course_point": (32, [(254, 2, UINT16), (1, 4, UINT32), (2, 4, SINT32), (3, 4, SINT32), (4, 4, UINT32),
+                          (5, 1, ENUM), (6, 16, STRING)]),
     "file_creator": (49, [(1, 1, UINT8), (2, 21, STRING)]),
 }
+
+# Détection des changements de direction (guidage « Tourner à gauche / à droite »).
+TURN_WINDOW = 25.0     # m avant / après le point pour mesurer le cap
+TURN_MIN_ANGLE = 35.0  # degrés : en dessous, on considère que l'on va tout droit
+TURN_MERGE = 35.0      # m : virages plus proches fusionnés (on garde le plus marqué)
+EDGE = 30.0            # m : pas de virage annoncé au tout début ni à la toute fin
+# (type FIT, libellé) selon l'angle, à gauche / à droite
+TURN_TYPES = [
+    (60, (19, "Gauche legere"), (21, "Droite legere")),
+    (120, (6, "Gauche"), (7, "Droite")),
+    (160, (20, "Gauche serree"), (22, "Droite serree")),
+    (181, (23, "Demi-tour"), (23, "Demi-tour")),
+]
 
 
 def _crc(data: bytes, crc: int = 0) -> int:
@@ -105,6 +123,49 @@ def _dist(a, b) -> float:
     return 2 * r * math.asin(math.sqrt(h))
 
 
+def _bearing(a, b) -> float:
+    la1, la2 = math.radians(a[0]), math.radians(b[0])
+    dlo = math.radians(b[1] - a[1])
+    x = math.sin(dlo) * math.cos(la2)
+    y = math.cos(la1) * math.sin(la2) - math.sin(la1) * math.cos(la2) * math.cos(dlo)
+    return math.degrees(math.atan2(x, y)) % 360
+
+
+def _turns(pts, cum) -> list[tuple[int, float]]:
+    """Indices des points de virage et angle signé (positif = à droite)."""
+    total, n = cum[-1], len(pts)
+    cands = []
+    j = k = 0
+    for i in range(1, n - 1):
+        if cum[i] < EDGE or total - cum[i] < EDGE:
+            continue
+        while j < i and cum[i] - cum[j + 1] >= TURN_WINDOW:
+            j += 1
+        k = max(k, i + 1)
+        while k < n - 1 and cum[k] - cum[i] < TURN_WINDOW:
+            k += 1
+        if cum[i] - cum[j] < 1 or cum[k] - cum[i] < 1:
+            continue
+        ang = (_bearing(pts[i], pts[k]) - _bearing(pts[j], pts[i]) + 180) % 360 - 180
+        if abs(ang) >= TURN_MIN_ANGLE:
+            cands.append((i, ang))
+    turns: list[tuple[int, float]] = []
+    for i, ang in cands:
+        if turns and cum[i] - cum[turns[-1][0]] < TURN_MERGE:
+            if abs(ang) > abs(turns[-1][1]):
+                turns[-1] = (i, ang)
+        else:
+            turns.append((i, ang))
+    return turns
+
+
+def _turn_type(ang: float) -> tuple[int, str]:
+    for limit, left, right in TURN_TYPES:
+        if abs(ang) < limit:
+            return right if ang > 0 else left
+    return TURN_TYPES[-1][1]
+
+
 def _semi(deg: float) -> int:
     return int(round(deg * 2**31 / 180))
 
@@ -114,10 +175,11 @@ def gpx_to_fit(gpx: bytes, name: str, course_id: int = 0) -> bytes:
     t0 = int(dt.datetime.now(dt.timezone.utc).timestamp()) - FIT_EPOCH
 
     # Points : distance cumulée, dénivelés cumulés, horodatage à allure constante.
-    recs, dist, up, down, prev_ele = [], 0.0, 0.0, 0.0, None
+    recs, dist, up, down, prev_ele, cum = [], 0.0, 0.0, 0.0, None, []
     for i, (lat, lon, ele) in enumerate(pts):
         if i:
             dist += _dist(pts[i - 1], (lat, lon))
+        cum.append(dist)
         if ele is not None and prev_ele is not None:
             d = ele - prev_ele
             up += max(d, 0.0)
@@ -156,6 +218,13 @@ def gpx_to_fit(gpx: bytes, name: str, course_id: int = 0) -> bytes:
     w.define(4, "record")
     for r in recs:
         w.data(4, "record", r)
+    turns = _turns(pts, cum)
+    if turns:
+        w.define(5, "course_point")
+        for n_, (i, ang) in enumerate(turns):
+            ctype, label = _turn_type(ang)
+            r = recs[i]
+            w.data(5, "course_point", {254: n_, 1: r[253], 2: r[0], 3: r[1], 4: r[5], 5: ctype, 6: label})
     w.data(3, "event", {253: t_end, 0: 0, 4: 0, 1: 9})        # timer, stop_disable_all
     w.define(0, "file_creator")
     w.data(0, "file_creator", {1: 0, 2: CREATOR})

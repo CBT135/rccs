@@ -44,7 +44,7 @@ DEFS = {
 
 # Détection des changements de direction (guidage « Tourner à gauche / à droite »).
 TURN_WINDOW = 25.0     # m avant / après le point pour mesurer le cap
-TURN_MIN_ANGLE = 35.0  # degrés : en dessous, on considère que l'on va tout droit
+TURN_MIN_ANGLE = 45.0  # degrés : en dessous, on considère que l'on va tout droit
 TURN_MERGE = 35.0      # m : virages plus proches fusionnés (on garde le plus marqué)
 EDGE = 30.0            # m : pas de virage annoncé au tout début ni à la toute fin
 # (type FIT, libellé) selon l'angle, à gauche / à droite

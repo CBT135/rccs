@@ -36,6 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 TRACE_DIR = ROOT / "trace"
 SPOND_API = "https://api.spond.com/core/v1/"
 COURSE_RE = re.compile(r"connect\.garmin\.com/(?:modern|app)/course/(\d+)", re.I)
+# Export GPX d'un itinéraire Suunto / Sports Tracker (lien public, sans connexion).
+SPORTSTRACKER_RE = re.compile(r"https://api\.sports-tracker\.com/apiserver/v\d+/routes/export/[^\s\"'<>]+", re.I)
 SUMMARY: list[str] = []
 
 
@@ -94,22 +96,32 @@ def _ts(v) -> dt.datetime:
     return dt.datetime.min.replace(tzinfo=dt.timezone.utc)
 
 
-def course_link_of(event: dict) -> tuple[int, dt.datetime] | None:
-    """Dernier lien de parcours publié dans l'événement, avec sa date de publication."""
-    best: tuple[int, dt.datetime] | None = None
-    desc_ids = COURSE_RE.findall(event.get("description") or "")
-    if desc_ids:
-        best = (int(desc_ids[-1]), _ts(event.get("createdTime") or event.get("updated")))
+def sources_in(text: str) -> list:
+    """Traces prises en charge dans un texte, dans l'ordre : numéro de parcours Garmin (int)
+    ou lien d'export Sports Tracker (str)."""
+    found = [(m.start(), int(m.group(1))) for m in COURSE_RE.finditer(text)]
+    found += [(m.start(), m.group(0)) for m in SPORTSTRACKER_RE.finditer(text)]
+    return [src for _, src in sorted(found)]
+
+
+def course_link_of(event: dict) -> tuple[int | str, dt.datetime] | None:
+    """Première trace postée dans l'événement (description puis commentaires, par date),
+    avec sa date de publication. Garmin Connect ou Sports Tracker."""
+    posts = [(_ts(event.get("createdTime") or event.get("updated")), event.get("description") or "")]
     stack = list(event.get("comments") or [])
     while stack:
         c = stack.pop(0)
         stack.extend(c.get("children") or [])
-        ids = COURSE_RE.findall(c.get("text") or "")
-        if ids:
-            when = _ts(c.get("timestamp"))
-            if best is None or when >= best[1]:
-                best = (int(ids[-1]), when)
-    return best
+        posts.append((_ts(c.get("timestamp")), c.get("text") or ""))
+    for when, text in sorted(posts, key=lambda x: x[0]):
+        srcs = sources_in(text)
+        if srcs:
+            return srcs[0], when
+    return None
+
+
+def describe(src) -> str:
+    return f"parcours Garmin {src}" if isinstance(src, int) else "itinéraire Sports Tracker"
 
 
 def club_sigle(event: dict) -> str:
@@ -137,7 +149,8 @@ def garmin_client():
 
 
 def rename_gpx(raw: bytes, name: str) -> bytes:
-    ns = "http://www.topografix.com/GPX/1/1"
+    m = re.search(rb'<gpx[^>]*\sxmlns="([^"]+)"', raw)
+    ns = m.group(1).decode() if m else "http://www.topografix.com/GPX/1/1"
     ET.register_namespace("", ns)
     # Conserve les préfixes d'origine de Garmin (sinon ET écrit ns0, ns1…).
     for prefix, uri in re.findall(rb'xmlns:(\w+)="([^"]+)"', raw):
@@ -160,24 +173,45 @@ def rename_gpx(raw: bytes, name: str) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, posted: dt.datetime) -> None:
+def download_url(url: str) -> bytes:
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"User-Agent": "rccs-trace/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = r.read()
+    if b"<gpx" not in data[:2000]:
+        raise ValueError(f"le lien ne renvoie pas de GPX ({data[:80]!r})")
+    return data
+
+
+def get_gpx(g, src) -> bytes:
+    return g.download_course(src, fmt="gpx") if isinstance(src, int) else download_url(src)
+
+
+def publish(g, name: str, src, start: dt.datetime, event: dict, posted: dt.datetime) -> None:
     """Écrit la trace dans trace/ et supprime toutes les autres."""
     TRACE_DIR.mkdir(exist_ok=True)
-    from gpx2fit import gpx_to_fit, rename_fit_course
+    from gpx2fit import gpx_to_fit, rename_fit_course, stats
 
-    gpx = rename_gpx(g.download_course(course_id, fmt="gpx"), name)
-    # FIT préparé par Garmin Connect pour la montre principale : il contient les points de virage
-    # (selon le réglage « Notifications de changements de direction » du parcours). On ne change
-    # que son nom. À défaut, conversion maison du GPX avec détection des virages.
-    try:
-        device = os.environ.get("GARMIN_DEVICE_ID", "").strip() or \
-            g.get_primary_training_device()["PrimaryTrainingDevice"]["deviceId"]
-        raw = g.download(f"/course-service/course/fit/{course_id}/{device}", params={"elevation": "true"})
-        fit = rename_fit_course(raw, name)
-        log(f"FIT Garmin pour l'appareil {device}, renommé {name}")
-    except Exception as e:
-        log(f"FIT Garmin indisponible ({e}) : conversion du GPX avec détection des virages")
-        fit = gpx_to_fit(gpx, name, course_id)
+    gpx = rename_gpx(get_gpx(g, src), name)
+    fit = None
+    if isinstance(src, int):
+        # FIT préparé par Garmin Connect pour la montre principale : il contient les points de virage
+        # (selon le réglage « Notifications de changements de direction » du parcours). On ne change
+        # que son nom. À défaut, conversion maison du GPX avec détection des virages.
+        try:
+            device = os.environ.get("GARMIN_DEVICE_ID", "").strip() or \
+                g.get_primary_training_device()["PrimaryTrainingDevice"]["deviceId"]
+            raw = g.download(f"/course-service/course/fit/{src}/{device}", params={"elevation": "true"})
+            fit = rename_fit_course(raw, name)
+            log(f"FIT Garmin pour l'appareil {device}, renommé {name}")
+        except Exception as e:
+            log(f"FIT Garmin indisponible ({e}) : conversion du GPX avec détection des virages")
+    if fit is None:
+        fit = gpx_to_fit(gpx, name, src if isinstance(src, int) else 0)
+        st = stats(gpx)
+        log(f"FIT créé depuis le GPX : {st['km']} km, {st['points']} points, {st['virages']} virages, "
+            f"altitude {'oui' if st['altitude'] else 'non'}")
     keep = {f"{name}.fit", f"{name}.gpx", "latest.json", "latest.txt"}
     for f in TRACE_DIR.iterdir():
         if f.is_file() and f.name not in keep:
@@ -191,7 +225,7 @@ def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, poste
         "date": start.date().isoformat(),
         "heure": start.strftime("%H:%M"),
         "titre": event.get("heading"),
-        "garminCourseId": course_id,
+        "source": f"https://connect.garmin.com/modern/course/{src}" if isinstance(src, int) else src,
         "publieeSurSpond": posted.astimezone(TZ).isoformat(timespec="seconds"),
     }
     (TRACE_DIR / "latest.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
@@ -207,8 +241,8 @@ def forced() -> bool:
     cid = os.environ.get("FORCE_COURSE_ID", "").strip()
     if not cid:
         return False
-    m = COURSE_RE.search(cid)
-    cid = int(m.group(1)) if m else int(cid)
+    srcs = sources_in(cid)
+    cid = srcs[0] if srcs else int(cid)
     day = os.environ.get("FORCE_DATE", "").strip()
     hhmm = os.environ.get("FORCE_TIME", "").strip() or "18:30"
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
@@ -216,9 +250,10 @@ def forced() -> bool:
     start = dt.datetime.fromisoformat(f"{day}T{hhmm}").replace(tzinfo=TZ)
     sigle = os.environ.get("CLUB_SIGLE", "").strip() or "RCCS"
     name = f"{start:%Y%m%d}-{sigle}"
-    log(f"Publication manuelle : parcours {cid} -> {name}")
+    log(f"Publication manuelle : {describe(cid)} -> {name}")
     # Datée du début de la sortie : toute trace postée ensuite sur Spond la remplacera.
-    publish(garmin_client(), name, cid, start, {"heading": "Publication manuelle"}, start)
+    publish(garmin_client() if isinstance(cid, int) else None, name, cid, start,
+            {"heading": "Publication manuelle"}, start)
     return True
 
 
@@ -240,6 +275,22 @@ def list_links(events: list[dict]) -> None:
                 log(f"{start:%d/%m %H:%M} {ev.get('heading')} | {kind} {_ts(when).astimezone(TZ):%d/%m %H:%M} | {url}")
         for a in ev.get("attachments") or []:
             log(f"{start:%d/%m %H:%M} {ev.get('heading')} | pièce jointe | {json.dumps(a, ensure_ascii=False)[:300]}")
+        link = course_link_of(ev)
+        if link:
+            from gpx2fit import gpx_to_fit, stats
+
+            src, posted = link
+            try:
+                g = garmin_client() if isinstance(src, int) else None
+                name = f"{start:%Y%m%d}-{club_sigle(ev)}"
+                gpx = rename_gpx(get_gpx(g, src), name)
+                fit = gpx_to_fit(gpx, name)
+                st = stats(gpx)
+                log(f"  -> retenue : {describe(src)} (postée le {posted.astimezone(TZ):%d/%m %H:%M}) : GPX lu, "
+                    f"{st['km']} km, {st['points']} points, {st['virages']} virages, altitude "
+                    f"{'oui' if st['altitude'] else 'non'}, FIT {len(fit)} octets")
+            except Exception as e:
+                log(f"  -> ERREUR lecture {describe(src)} : {e}")
 
 
 def main() -> None:
@@ -263,7 +314,7 @@ def main() -> None:
         found.append((start, name, cid, ev, posted))
 
     if not found:
-        log("Aucun événement Spond à venir avec une trace Garmin : trace précédente conservée.")
+        log("Aucun événement Spond à venir avec une trace : trace précédente conservée.")
         # Vérifie quand même la connexion Garmin (lecture) pour détecter un problème avant la prochaine trace.
         try:
             garmin_client()
@@ -275,7 +326,6 @@ def main() -> None:
             raise
         return
 
-    g = garmin_client()
     # Dépôt : uniquement la dernière trace postée sur Spond.
     start, name, cid, ev, posted = max(found, key=lambda x: x[4])
 
@@ -290,8 +340,8 @@ def main() -> None:
                 return
         except (KeyError, ValueError):
             pass
-    log(f"Dernière trace postée : {ev.get('heading')} du {start:%d/%m %H:%M} -> {name} (parcours {cid})")
-    publish(g, name, cid, start, ev, posted)
+    log(f"Dernière trace postée : {ev.get('heading')} du {start:%d/%m %H:%M} -> {name} ({describe(cid)})")
+    publish(garmin_client() if isinstance(cid, int) else None, name, cid, start, ev, posted)
 
 
 if __name__ == "__main__":

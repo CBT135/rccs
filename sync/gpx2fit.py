@@ -100,19 +100,47 @@ class _Writer:
         return body + struct.pack("<H", _crc(body))
 
 
+MAX_STEP = 30.0  # m : les segments plus longs sont découpés (densité proche des parcours Garmin)
+
+
 def _points(gpx: bytes) -> list[tuple[float, float, float | None]]:
+    """Points de la trace (trkpt, sinon rtept), quel que soit l'espace de noms GPX (1.0 / 1.1).
+    Supprime les doublons et densifie les longs segments (itinéraires tracés point par point)."""
     root = ET.fromstring(gpx)
-    pts = []
+    ns = root.tag[: root.tag.index("}") + 1] if root.tag.startswith("{") else ""
+    raw = []
     for tag in ("trkpt", "rtept"):
-        for p in root.iter(NS + tag):
-            ele = p.find(NS + "ele")
-            pts.append((float(p.get("lat")), float(p.get("lon")),
-                        float(ele.text) if ele is not None and ele.text else None))
-        if pts:
+        for p in root.iter(ns + tag):
+            ele = p.find(ns + "ele")
+            raw.append((float(p.get("lat")), float(p.get("lon")),
+                        float(ele.text) if ele is not None and (ele.text or "").strip() else None))
+        if raw:
             break
+    pts: list[tuple[float, float, float | None]] = []
+    for q in raw:
+        if pts and _dist(pts[-1], q) < 0.5:
+            continue
+        if pts:
+            d = _dist(pts[-1], q)
+            n = int(d // MAX_STEP)
+            a = pts[-1]
+            for k in range(1, n + 1):
+                t = k / (n + 1)
+                ele = a[2] + (q[2] - a[2]) * t if a[2] is not None and q[2] is not None else None
+                pts.append((a[0] + (q[0] - a[0]) * t, a[1] + (q[1] - a[1]) * t, ele))
+        pts.append(q)
     if len(pts) < 2:
         raise ValueError("GPX sans points de trace")
     return pts
+
+
+def stats(gpx: bytes) -> dict:
+    pts = _points(gpx)
+    cum = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        cum.append(cum[-1] + _dist(a, b))
+    return {"points": len(pts), "km": round(cum[-1] / 1000, 2), "virages": len(_turns(pts, cum)),
+            "altitude": any(p[2] is not None for p in pts)}
 
 
 def _dist(a, b) -> float:
@@ -186,13 +214,13 @@ def gpx_to_fit(gpx: bytes, name: str, course_id: int = 0) -> bytes:
             down += max(-d, 0.0)
         if ele is not None:
             prev_ele = ele
-        alt = ele if ele is not None else (prev_ele if prev_ele is not None else 0.0)
+        alt = ele if ele is not None else prev_ele   # None si la trace n'a pas d'altitude
         recs.append({
             0: _semi(lat), 1: _semi(lon),
             253: t0 + int(round(dist / SPEED)),
             6: 0 if i == 0 else int(round(SPEED * 1000)),
             5: int(round(dist * 100)),
-            2: max(0, min(0xFFFE, int(round((alt + 500) * 5)))),
+            2: 0xFFFF if alt is None else max(0, min(0xFFFE, int(round((alt + 500) * 5)))),  # 0xFFFF = inconnue
             121: int(round(up)), 122: int(round(down)),
         })
     t_end = recs[-1][253]

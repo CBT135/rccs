@@ -163,10 +163,21 @@ def rename_gpx(raw: bytes, name: str) -> bytes:
 def publish(g, name: str, course_id: int, start: dt.datetime, event: dict, posted: dt.datetime) -> None:
     """Écrit la trace dans trace/ et supprime toutes les autres."""
     TRACE_DIR.mkdir(exist_ok=True)
-    from gpx2fit import gpx_to_fit
+    from gpx2fit import gpx_to_fit, rename_fit_course
 
     gpx = rename_gpx(g.download_course(course_id, fmt="gpx"), name)
-    fit = gpx_to_fit(gpx, name, course_id)  # format enregistré comme parcours par la montre
+    # FIT préparé par Garmin Connect pour la montre principale : il contient les points de virage
+    # (selon le réglage « Notifications de changements de direction » du parcours). On ne change
+    # que son nom. À défaut, conversion maison du GPX avec détection des virages.
+    try:
+        device = os.environ.get("GARMIN_DEVICE_ID", "").strip() or \
+            g.get_primary_training_device()["PrimaryTrainingDevice"]["deviceId"]
+        raw = g.download(f"/course-service/course/fit/{course_id}/{device}", params={"elevation": "true"})
+        fit = rename_fit_course(raw, name)
+        log(f"FIT Garmin pour l'appareil {device}, renommé {name}")
+    except Exception as e:
+        log(f"FIT Garmin indisponible ({e}) : conversion du GPX avec détection des virages")
+        fit = gpx_to_fit(gpx, name, course_id)
     keep = {f"{name}.fit", f"{name}.gpx", "latest.json", "latest.txt"}
     for f in TRACE_DIR.iterdir():
         if f.is_file() and f.name not in keep:

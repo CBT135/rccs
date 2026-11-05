@@ -14,6 +14,11 @@ sur la montre.
    - Elle télécharge ce parcours en GPX et le renomme `AAAAMMJJ-RCCS` d'après la date de
      l'événement (suffixe `-2` si deux sorties ont lieu le même jour). Elle l'écrit ensuite dans
      `trace/`, avec `latest.txt` et `latest.json`.
+   - Le fichier `.fit` chargé par la montre est celui que Garmin Connect prépare pour ta montre
+     principale, renommé `AAAAMMJJ-RCCS`. Il contient les annonces de changement de direction
+     si le réglage « Notifications de changements de direction » est activé sur le parcours.
+     S'il n'est pas disponible, le workflow le recrée à partir du GPX et détecte lui-même les
+     virages (seuil 45°).
    - **Rien n'est écrit dans le compte Garmin.** La connexion Garmin sert uniquement à lire le
      parcours, que Garmin refuse de fournir sans connexion.
    - L'ancienne trace reste dans `trace/` tant qu'aucune trace plus récente n'a été postée. Elle

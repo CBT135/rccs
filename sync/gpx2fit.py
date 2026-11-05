@@ -229,3 +229,53 @@ def gpx_to_fit(gpx: bytes, name: str, course_id: int = 0) -> bytes:
     w.define(0, "file_creator")
     w.data(0, "file_creator", {1: 0, 2: CREATOR})
     return w.file()
+
+
+def rename_fit_course(fit: bytes, name: str) -> bytes:
+    """Remplace le nom du parcours (course.name) dans un FIT existant, sans rien changer d'autre.
+
+    Sert à reprendre tel quel le FIT préparé par Garmin Connect pour la montre (avec ses
+    points de virage) en lui donnant le nom AAAAMMJJ-RCCS. Recalcule le CRC du fichier.
+    """
+    b = bytearray(fit)
+    if len(b) < 14 or b[8:12] != b".FIT":
+        raise ValueError("pas un fichier FIT")
+    hs = b[0]
+    end = hs + struct.unpack("<I", b[4:8])[0]
+    defs: dict[int, tuple[int, list[tuple[int, int]], int]] = {}
+    p, done = hs, False
+    while p < end:
+        h = b[p]
+        p += 1
+        if h & 0x80:                       # en-tête à horodatage compressé
+            p += defs[(h >> 5) & 3][2]
+            continue
+        lt = h & 0x0F
+        if h & 0x40:                       # définition
+            arch = b[p + 1]
+            g = struct.unpack(">H" if arch else "<H", b[p + 2:p + 4])[0]
+            n = b[p + 4]
+            p += 5
+            fields = [(b[p + 3 * i], b[p + 3 * i + 1]) for i in range(n)]
+            p += 3 * n
+            size = sum(s for _, s in fields)
+            if h & 0x20:                   # champs développeur
+                nd = b[p]
+                size += sum(b[p + 1 + 3 * i + 1] for i in range(nd))
+                p += 1 + 3 * nd
+            defs[lt] = (g, fields, size)
+            continue
+        g, fields, size = defs[lt]
+        if g == 31 and not done:           # message course
+            off = p
+            for num, sz in fields:
+                if num == 5:
+                    raw = name.encode("utf-8")[: sz - 1]
+                    b[off:off + sz] = raw + b"\0" * (sz - len(raw))
+                    done = True
+                off += sz
+        p += size
+    if not done:
+        raise ValueError("nom de parcours introuvable dans le FIT")
+    b[end:end + 2] = struct.pack("<H", _crc(bytes(b[:end])))
+    return bytes(b)

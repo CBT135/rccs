@@ -1,10 +1,10 @@
 {
-  "name": "20261106-RCCS",
-  "fit": "trace/20261106-RCCS.fit",
-  "gpx": "trace/20261106-RCCS.gpx",
-  "date": "2026-11-06",
-  "heure": "18:30",
-  "titre": "Sortie collective du vendredi",
-  "source": "https://api.sports-tracker.com/apiserver/v2/routes/export/yeyhQPa0GKSY7SRlXyymeeJ3qR4hvWf_EkYqMawKLaMhoE3U_xq88bDMkp0thDKh?brand=SUUNTOAPP&format=gpx-route",
-  "publieeSurSpond": "2026-11-05T20:12:37+01:00"
+  "name": "20261108-RCCS",
+  "fit": "trace/20261108-RCCS.fit",
+  "gpx": "trace/20261108-RCCS.gpx",
+  "date": "2026-11-08",
+  "heure": "09:30",
+  "titre": "Sortie collective du dimanche",
+  "source": "https://connect.garmin.com/modern/course/529061933",
+  "publieeSurSpond": "2026-11-06T21:41:43+01:00"
 }

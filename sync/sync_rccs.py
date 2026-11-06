@@ -335,7 +335,7 @@ def main() -> None:
         try:
             meta = json.loads(current.read_text())
             prev = dt.datetime.fromisoformat(meta["publieeSurSpond"])
-            if posted <= prev:
+            if posted.replace(microsecond=0) <= prev:   # date enregistrée à la seconde près
                 log(f"Pas de nouvelle trace (dernière publiée : {meta['name']}) : dépôt inchangé.")
                 return
         except (KeyError, ValueError):

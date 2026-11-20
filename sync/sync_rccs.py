@@ -337,6 +337,13 @@ def main() -> None:
         try:
             meta = json.loads(current.read_text())
             if meta.get("name") == name and meta.get("source") == src_url:
+                # Retire d'éventuels fichiers d'une autre trace (ajout manuel, test) : une seule trace.
+                keep = {f"{name}.fit", f"{name}.gpx", "latest.json", "latest.txt"}
+                extra = [f for f in TRACE_DIR.iterdir() if f.is_file() and f.name not in keep]
+                for f in extra:
+                    f.unlink()
+                if extra:
+                    log(f"Fichiers d'une autre trace retirés : {', '.join(sorted(f.name for f in extra))}")
                 log(f"Trace déjà publiée : {name} ({ev.get('heading')} du {start:%d/%m %H:%M}) : dépôt inchangé.")
                 return
         except ValueError:

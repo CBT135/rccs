@@ -326,21 +326,22 @@ def main() -> None:
             raise
         return
 
-    # Dépôt : uniquement la dernière trace postée sur Spond.
-    start, name, cid, ev, posted = max(found, key=lambda x: x[4])
+    # Dépôt : la trace de la prochaine sortie qui en a une (celle du jour tant qu'elle n'est pas
+    # terminée, même si la trace d'une sortie suivante a été postée plus tard).
+    start, name, cid, ev, posted = min(found, key=lambda x: x[0])
+    src_url = f"https://connect.garmin.com/modern/course/{cid}" if isinstance(cid, int) else cid
 
-    # On ne remplace la trace du dépôt que par une trace postée plus récemment.
+    # Rien à faire si c'est déjà la trace publiée.
     current = TRACE_DIR / "latest.json"
     if current.exists():
         try:
             meta = json.loads(current.read_text())
-            prev = dt.datetime.fromisoformat(meta["publieeSurSpond"])
-            if posted.replace(microsecond=0) <= prev:   # date enregistrée à la seconde près
-                log(f"Pas de nouvelle trace (dernière publiée : {meta['name']}) : dépôt inchangé.")
+            if meta.get("name") == name and meta.get("source") == src_url:
+                log(f"Trace déjà publiée : {name} ({ev.get('heading')} du {start:%d/%m %H:%M}) : dépôt inchangé.")
                 return
-        except (KeyError, ValueError):
+        except ValueError:
             pass
-    log(f"Dernière trace postée : {ev.get('heading')} du {start:%d/%m %H:%M} -> {name} ({describe(cid)})")
+    log(f"Prochaine sortie avec trace : {ev.get('heading')} du {start:%d/%m %H:%M} -> {name} ({describe(cid)})")
     publish(garmin_client() if isinstance(cid, int) else None, name, cid, start, ev, posted)
 
 

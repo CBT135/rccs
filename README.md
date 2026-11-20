@@ -12,8 +12,9 @@ sur la montre.
    - Elle lit les événements Spond à venir et repère les traces postées en description ou en
      commentaire : parcours Garmin Connect (`connect.garmin.com/.../course/<id>`) ou export
      d'itinéraire Sports Tracker / Suunto (`api.sports-tracker.com/.../routes/export/...`).
-     Pour un même événement, elle prend la **première** trace postée. Entre les événements, elle
-     retient la plus récente. Les liens OpenRunner ne sont pas pris en charge (export réservé aux
+     Pour un même événement, elle prend la **première** trace postée. Le dépôt contient la trace de
+     la **prochaine sortie** qui en a une : celle du jour tant que la sortie n'est pas terminée,
+     même si la trace d'une sortie suivante a été postée plus tard. Les liens OpenRunner ne sont pas pris en charge (export réservé aux
      comptes connectés).
    - Elle télécharge ce parcours en GPX et le renomme `AAAAMMJJ-RCCS` d'après la date de
      l'événement (suffixe `-2` si deux sorties ont lieu le même jour). Elle l'écrit ensuite dans
@@ -25,8 +26,9 @@ sur la montre.
      virages (seuil 45°).
    - **Rien n'est écrit dans le compte Garmin.** La connexion Garmin sert uniquement à lire le
      parcours, que Garmin refuse de fournir sans connexion.
-   - L'ancienne trace reste dans `trace/` tant qu'aucune trace plus récente n'a été postée. Elle
-     n'est supprimée qu'une fois la nouvelle téléchargée.
+   - Si aucune sortie à venir n'a de trace, l'ancienne reste dans `trace/` (l'application signale
+     alors en orange qu'elle ne date pas du jour). Elle n'est remplacée qu'une fois la nouvelle
+     téléchargée.
    - Un résumé de chaque exécution s'affiche dans l'onglet **Actions**.
 2. **Application montre** (`garmin-app/`). Au lancement, elle lit `trace/latest.txt`, télécharge
    le `.fit` correspondant via le téléphone et l'enregistre dans **Parcours**, sous le nom

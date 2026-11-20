@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Montres Garmin sorties depuis fin 2021 (moins de 5 ans). -->
+<!-- Montres Garmin capables de suivre un parcours (avec ou sans cartographie) :
+     sorties depuis fin 2021, plus la Forerunner 745. Les Venu 2 Plus / 3 / 3S et
+     vivoactive 5 / 6 sont exclues : elles n'ont pas de navigation sur parcours. -->
 <iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
     <iq:application id="b41e42bb12ff437b85587b01329e3113" type="watch-app" name="@Strings.AppName" entry="RccsApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.0.0">
         <iq:products>
@@ -53,6 +55,7 @@
             <iq:product id="fr265s"/>
             <iq:product id="fr57042mm"/>
             <iq:product id="fr57047mm"/>
+            <iq:product id="fr745"/>
             <iq:product id="fr955"/>
             <iq:product id="fr965"/>
             <iq:product id="fr970"/>
@@ -69,14 +72,9 @@
             <iq:product id="marq2"/>
             <iq:product id="marq2aviator"/>
             <iq:product id="marq3"/>
-            <iq:product id="venu2plus"/>
-            <iq:product id="venu3"/>
-            <iq:product id="venu3s"/>
             <iq:product id="venu441mm"/>
             <iq:product id="venu445mm"/>
             <iq:product id="venux1"/>
-            <iq:product id="vivoactive5"/>
-            <iq:product id="vivoactive6"/>
         </iq:products>
         <iq:permissions>
             <iq:uses-permission id="Communications"/>

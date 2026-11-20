@@ -76,10 +76,11 @@ la prochaine trace postée sur Spond.
 
 ## 2. Installer l'application sur la montre
 
-L'application est compatible avec les montres sorties depuis fin 2021 : fēnix 7/8/9 et E,
-epix 2 et Pro, Enduro 3/4, Forerunner 165/170/255/265/570/955/965/970, Instinct 2/3/E/Crossover,
-Venu 2 Plus/3/4/X1, vívoactive 5/6, MARQ 2/3, Descent, D2, Approach S70/S72. La liste complète
-se trouve dans `garmin-app/manifest.xml`. La montre doit être connectée à Garmin Connect sur le
+L'application est compatible avec les montres capables de suivre un parcours, avec ou sans
+cartographie : fēnix 7/8/9 et E, epix 2 et Pro, Enduro 3/4, Forerunner 165/170/255/265/570/745/
+955/965/970, Instinct 2/3/E/Crossover, Venu 4/X1, MARQ 2/3, Descent, D2, Approach S70/S72. Les
+Venu 2 Plus / 3 / 3S et vívoactive 5 / 6 sont exclues : elles n'ont pas de navigation sur parcours.
+La liste complète se trouve dans `garmin-app/manifest.xml`. La montre doit être connectée à Garmin Connect sur le
 téléphone, et le Bluetooth doit être actif.
 
 1. Installe Visual Studio Code, l'extension **Monkey C** et le SDK Connect IQ (via le SDK

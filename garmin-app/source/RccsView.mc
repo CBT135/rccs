@@ -1,5 +1,7 @@
 import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.Time;
+import Toybox.Time.Gregorian;
 import Toybox.WatchUi;
 
 class RccsView extends WatchUi.View {
@@ -27,8 +29,45 @@ class RccsView extends WatchUi.View {
         set(title, line, "", Graphics.COLOR_WHITE);
     }
 
+    // Le nom de la trace commence par sa date (AAAAMMJJ-RCCS) : on la compare à aujourd'hui.
     function showDone(name as String, line as String) as Void {
-        set(name, line, "START : suivre", Graphics.COLOR_GREEN);
+        var traceDay = dayOf(name);
+        if (traceDay == null) {
+            set(name, line, "START : suivre", Graphics.COLOR_GREEN);
+            return;
+        }
+        var td = traceDay as Number;
+        var info = Gregorian.info(Time.now(), Time.FORMAT_SHORT);
+        var today = (info.year as Number) * 10000 + (info.month as Number) * 100 + (info.day as Number);
+        if (td == today) {
+            set(name, line, "START : suivre", Graphics.COLOR_GREEN);
+        } else if (td < today) {
+            // Ancienne trace : aucune trace n'a été publiée pour aujourd'hui.
+            set("Trace du " + ddmm(td), "Pas de trace aujourd'hui", "START : suivre quand même", Graphics.COLOR_ORANGE);
+        } else {
+            set(name, "pour le " + ddmm(td), "START : suivre", Graphics.COLOR_GREEN);
+        }
+    }
+
+    private function dayOf(name as String) as Number? {
+        if (name.length() < 8) {
+            return null;
+        }
+        var head = name.substring(0, 8);
+        if (head == null) {
+            return null;
+        }
+        var n = (head as String).toNumber();
+        if (n == null || (n as Number) < 20000101) {
+            return null;
+        }
+        return n as Number;
+    }
+
+    private function ddmm(yyyymmdd as Number) as String {
+        var d = yyyymmdd % 100;
+        var m = (yyyymmdd / 100) % 100;
+        return d.format("%02d") + "/" + m.format("%02d");
     }
 
     function showError(msg as String) as Void {

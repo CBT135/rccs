@@ -1,10 +1,10 @@
 {
-  "name": "20261120-RCCS",
-  "fit": "trace/20261120-RCCS.fit",
-  "gpx": "trace/20261120-RCCS.gpx",
-  "date": "2026-11-20",
-  "heure": "18:30",
-  "titre": "Sortie collective du vendredi",
+  "name": "20261118-RCCS",
+  "fit": "trace/20261118-RCCS.fit",
+  "gpx": "trace/20261118-RCCS.gpx",
+  "date": "2026-11-18",
+  "heure": "09:30",
+  "titre": "Publication manuelle",
   "source": "https://api.sports-tracker.com/apiserver/v2/routes/export/GoEaI81j0UfA6MnSJNPs95d6b-vfr-eIW9r72820MTnFuJ2968B1pLxrxy3aCf2d?brand=SUUNTOAPP&format=gpx-route",
-  "publieeSurSpond": "2026-11-20T09:48:29+01:00"
+  "publieeSurSpond": "2026-11-18T09:30:00+01:00"
 }

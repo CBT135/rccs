@@ -1,10 +1,10 @@
 {
-  "name": "20261125-RCCS",
-  "fit": "trace/20261125-RCCS.fit",
-  "gpx": "trace/20261125-RCCS.gpx",
-  "date": "2026-11-25",
+  "name": "20261127-RCCS",
+  "fit": "trace/20261127-RCCS.fit",
+  "gpx": "trace/20261127-RCCS.gpx",
+  "date": "2026-11-27",
   "heure": "18:30",
-  "titre": "Sortie collective du mercredi",
-  "source": "https://connect.garmin.com/modern/course/529857746",
-  "publieeSurSpond": "2026-11-25T17:46:18+01:00"
+  "titre": "Run'apéro Novembre",
+  "source": "https://api.sports-tracker.com/apiserver/v2/routes/export/D0_QpMTaudiTFknTNIZmJGdLYT5KsnpMCT5reDiVGoeGp05O1yzArOR-LojaMb-f?brand=SUUNTOAPP&format=gpx-route",
+  "publieeSurSpond": "2026-11-27T12:43:00+01:00"
 }
